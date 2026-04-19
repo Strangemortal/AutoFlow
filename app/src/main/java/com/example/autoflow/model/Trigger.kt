@@ -84,8 +84,9 @@ sealed class Trigger(val type: String, val value: String) {
      */
     data class BluetoothTrigger(
         val deviceAddress: String,
-        val deviceName: String? = null
-    ) : Trigger("BLUETOOTH", buildBluetoothJson(deviceAddress, deviceName))
+        val deviceName: String? = null,
+        val state: String = "CONNECTED"
+    ) : Trigger("Constants.TRIGGER_BLE", buildBluetoothJson(deviceAddress, deviceName))
 
     /**
      * Time-based trigger
@@ -176,32 +177,43 @@ sealed class Trigger(val type: String, val value: String) {
             triggerOnExit: Boolean,
             triggerOn: String
         ): String {
-            return """{"locationName":"$locationName","latitude":$latitude,"longitude":$longitude,"radius":$radius,"triggerOnEntry":$triggerOnEntry,"triggerOnExit":$triggerOnExit,"triggerOn":"$triggerOn"}"""
+            return JSONObject().apply {
+                put("locationName", locationName)
+                put("latitude", latitude)
+                put("longitude", longitude)
+                put("radius", radius)
+                put("triggerOnEntry", triggerOnEntry)
+                put("triggerOnExit", triggerOnExit)
+                put("triggerOn", triggerOn)
+            }.toString()
         }
 
         fun buildWiFiJson(ssid: String?, state: String): String {
-            return if (ssid != null) {
-                """{"ssid":"$ssid","state":"$state"}"""
-            } else {
-                """{"state":"$state"}"""
-            }
+            return JSONObject().apply {
+                if (ssid != null) put("ssid", ssid)
+                put("state", state)
+            }.toString()
         }
 
         fun buildBluetoothJson(deviceAddress: String, deviceName: String?): String {
-            return if (deviceName != null) {
-                """{"deviceAddress":"$deviceAddress","deviceName":"$deviceName"}"""
-            } else {
-                """{"deviceAddress":"$deviceAddress"}"""
-            }
+            return JSONObject().apply {
+                put("deviceAddress", deviceAddress)
+                if (deviceName != null) put("deviceName", deviceName)
+            }.toString()
         }
 
         fun buildTimeJson(time: String, days: List<String>): String {
-            val daysJson = days.joinToString(separator = "\",\"", prefix = "[\"", postfix = "\"]")
-            return """{"time":"$time","days":$daysJson}"""
+            return JSONObject().apply {
+                put("time", time)
+                put("days", org.json.JSONArray(days))
+            }.toString()
         }
 
         fun buildBatteryJson(level: Int, condition: String): String {
-            return """{"level":$level,"condition":"$condition"}"""
+            return JSONObject().apply {
+                put("level", level)
+                put("condition", condition)
+            }.toString()
         }
 
         /**
@@ -230,10 +242,20 @@ sealed class Trigger(val type: String, val value: String) {
         }
 
         private fun validateBleTrigger(value: String): Boolean {
-            // Check MAC address format
+            try {
+                val json = JSONObject(value)
+                if (json.has("deviceAddress")) {
+                    val address = json.getString("deviceAddress")
+                    return MAC_ADDRESS_PATTERN.matcher(address).matches()
+                }
+            } catch (e: Exception) {
+                // Not JSON, fall through
+            }
+
+            // 2. Fallback: Check if it is just a MAC address directly
             if (MAC_ADDRESS_PATTERN.matcher(value).matches()) return true
 
-            // Check device name (1-248 characters)
+            // 3. Fallback: Check if it is a device name
             return value.length in 1..248 && value.isNotBlank()
         }
 

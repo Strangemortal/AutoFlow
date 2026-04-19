@@ -3,23 +3,30 @@ package com.example.autoflow.ui.screens
 import android.Manifest
 import android.annotation.SuppressLint
 import android.bluetooth.BluetoothManager
+import android.content.Context
+import android.content.Intent
 import android.content.pm.ApplicationInfo
 import android.content.pm.PackageManager
 import android.location.Geocoder
+import android.net.wifi.WifiManager
 import android.os.Build
 import android.util.Log
+import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -28,18 +35,27 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectableGroup
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.Login
+import androidx.compose.material.icons.automirrored.filled.Logout
+import androidx.compose.material.icons.automirrored.filled.VolumeOff
+import androidx.compose.material.icons.automirrored.filled.VolumeUp
 import androidx.compose.material.icons.filled.Apps
+import androidx.compose.material.icons.filled.ArrowDropDown
+import androidx.compose.material.icons.filled.ArrowDropUp
 import androidx.compose.material.icons.filled.Block
 import androidx.compose.material.icons.filled.Bluetooth
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Code
 import androidx.compose.material.icons.filled.DateRange
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.DoNotDisturb
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Error
@@ -48,18 +64,19 @@ import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.LocationOn
-import androidx.compose.material.icons.filled.Login
-import androidx.compose.material.icons.filled.Logout
+import androidx.compose.material.icons.filled.LockOpen
 import androidx.compose.material.icons.filled.MyLocation
 import androidx.compose.material.icons.filled.Notifications
+import androidx.compose.material.icons.filled.PhoneCallback
 import androidx.compose.material.icons.filled.Save
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.filled.StarBorder
 import androidx.compose.material.icons.filled.SwapHoriz
 import androidx.compose.material.icons.filled.Vibration
-import androidx.compose.material.icons.filled.VolumeOff
-import androidx.compose.material.icons.filled.VolumeUp
+import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material.icons.filled.Wifi
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -71,7 +88,9 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.DividerDefaults
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -81,6 +100,8 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TimePicker
@@ -91,6 +112,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.livedata.observeAsState
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -99,6 +121,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
@@ -108,11 +131,25 @@ import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.autoflow.data.WorkflowEntity
+import com.example.autoflow.data.toActions
+import com.example.autoflow.data.toTriggers
 import com.example.autoflow.geofence.GeofenceManager
 import com.example.autoflow.model.Action
+import com.example.autoflow.model.SavedBluetoothDevice
+import com.example.autoflow.model.SavedLocation
+import com.example.autoflow.model.SavedWiFiNetwork
 import com.example.autoflow.model.Trigger
+import com.example.autoflow.model.TriggerHelpers
+import com.example.autoflow.script.ScriptPermission
+import com.example.autoflow.ui.components.AppSelectorComposable
+import com.example.autoflow.ui.components.getAppNameFromPackage
 import com.example.autoflow.ui.theme.AutoFlowTheme
+import com.example.autoflow.util.AutoReplyManager
 import com.example.autoflow.util.Constants
+import com.example.autoflow.util.TriggerParser
+import com.example.autoflow.viewmodel.BluetoothViewModel
+import com.example.autoflow.viewmodel.LocationViewModel
+import com.example.autoflow.viewmodel.WiFiViewModel
 import com.example.autoflow.viewmodel.WorkflowViewModel
 import com.google.android.gms.location.FusedLocationProviderClient
 import com.google.android.gms.location.LocationServices
@@ -120,55 +157,14 @@ import com.google.android.gms.location.Priority
 import com.google.android.gms.tasks.CancellationToken
 import com.google.android.gms.tasks.CancellationTokenSource
 import com.google.android.gms.tasks.OnTokenCanceledListener
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.LocalTime
 import java.util.Locale
 import kotlin.math.roundToInt
-import android.content.Context
-import androidx.compose.foundation.layout.heightIn
-import androidx.compose.material.icons.filled.Warning
-import com.example.autoflow.data.toActions
-import com.example.autoflow.data.toTriggers
-import com.example.autoflow.ui.components.AppSelectorComposable
-import android.content.Intent
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.filled.LockOpen
-import androidx.compose.material.icons.filled.Star
-import androidx.compose.material3.Surface
-import com.example.autoflow.ui.components.getAppNameFromPackage
-import com.example.autoflow.viewmodel.LocationViewModel
-import androidx.compose.material3.ExposedDropdownMenuBox
-import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material.icons.filled.ArrowDropDown
-import androidx.compose.material.icons.filled.ArrowDropUp
-import androidx.compose.material.icons.filled.Place
-import androidx.compose.material3.OutlinedTextFieldDefaults
-import com.example.autoflow.model.SavedBluetoothDevice
-import com.example.autoflow.model.SavedLocation
-import com.example.autoflow.model.SavedWiFiNetwork
-import com.example.autoflow.viewmodel.WiFiViewModel
-import com.example.autoflow.viewmodel.BluetoothViewModel
-import android.net.wifi.WifiManager
-import android.widget.Toast
-import androidx.compose.material3.Switch
-import androidx.compose.material.icons.filled.*
-import androidx.compose.foundation.background
-import androidx.compose.material.icons.filled.Delete
-import androidx.compose.foundation.layout.PaddingValues
-import com.example.autoflow.model.TriggerHelpers
-import com.example.autoflow.util.TriggerParser
-import kotlinx.coroutines.Dispatchers
-import androidx.compose.material3.*
-import androidx.compose.ui.text.font.FontFamily
-import com.example.autoflow.util.AutoReplyManager
-import kotlinx.coroutines.withContext
-import com.example.autoflow.script.ScriptPermission
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
-import androidx.compose.runtime.mutableStateListOf
-import androidx.compose.material.icons.filled.Code
 
 
 /**
@@ -261,13 +257,13 @@ fun TaskCreationScreen(
     var bluetoothTriggerType by remember { mutableStateOf("connect") }
 
     // Pre-populate fields if editing
-    // ✅ FIXED: Pre-populate fields if editing
+    //  FIXED: Pre-populate fields if editing
     LaunchedEffect(existingWorkflow) {
         existingWorkflow?.let { workflow ->
             try {
                 taskName = workflow.workflowName
 
-                // ✅ FIXED: Use explicit type for forEach
+                //  FIXED: Use explicit type for forEach
                 val triggersList: List<Trigger> = workflow.toTriggers()
                 triggersList.forEach { trigger: Trigger ->
                     when (trigger.type) {
@@ -282,14 +278,17 @@ fun TaskCreationScreen(
                             wifiTriggerExpanded = true
                             val wifiData = TriggerParser.parseWifiData(trigger)
                             wifiData?.let { data ->
-                                wifiState = data.state
+                                wifiSsid = data.ssid ?: "" //  SET SSID
+                                wifiTriggerType = data.state //  SET TRIGGER TYPE (connect/disconnect)
                             }
                         }
                         "BLUETOOTH" -> {
                             bluetoothDeviceTriggerExpanded = true
                             val bluetoothData = TriggerParser.parseBluetoothData(trigger)
                             bluetoothData?.let { data ->
-                                bluetoothDeviceAddress = data.deviceAddress
+                                bluetoothMacAddress = data.deviceAddress //  SET MAC
+                                bluetoothDeviceName = data.deviceName ?: "" //  SET NAME
+                                bluetoothTriggerType = data.state //  SET TRIGGER TYPE
                             }
                         }
                         "LOCATION" -> {
@@ -310,7 +309,7 @@ fun TaskCreationScreen(
                     }
                 }
 
-                // ✅ FIXED: Handle actions similarly
+                //  FIXED: Handle actions similarly
                 val actionsList: List<Action> = workflow.toActions()
                 actionsList.firstOrNull()?.let { action: Action ->
                     when (action.type) {
@@ -442,55 +441,112 @@ fun TaskCreationScreen(
             SaveButtonsCard(
                 workflowId = workflowId,
                 onSave = {
+                    // 1. Strict UI-Side Validation
+                    if (taskName.isBlank()) {
+                        taskNameError = "Task name is required"
+                        return@SaveButtonsCard
+                    }
+
+                    // Validate Triggers
+                    val validLocation = locationTriggerExpanded && locationDetailsInput.isNotBlank()
+                    val validWifi = wifiTriggerExpanded // Valid even if SSID is empty (Any WiFi)
+                    val validTime = timeTriggerExpanded && timeValue.isNotBlank()
+                    val validBluetooth = bluetoothDeviceTriggerExpanded && bluetoothDeviceAddress.isNotBlank()
+
+                    if (!validLocation && !validWifi && !validTime && !validBluetooth) {
+                        errorMessage = "Please configure at least ONE valid trigger."
+                        showErrorDialog = true
+                        return@SaveButtonsCard
+                    }
+
+                    // Validate Actions
+                    val validNotification = sendNotificationActionExpanded && notificationTitle.isNotBlank()
+                    val validToggle = toggleSettingsActionExpanded
+                    val validScript = runScriptActionExpanded && scriptText.isNotBlank()
+                    val validSound = setSoundModeActionExpanded
+                    val validBlock = blockAppsActionExpanded && selectedAppsToBlock.isNotEmpty()
+                    val validUnblock = unblockAppsActionExpanded
+
+                    if (!validNotification && !validToggle && !validScript && !validSound && !validBlock && !validUnblock) {
+                        errorMessage = "Please configure at least ONE action"
+                        showErrorDialog = true
+                        return@SaveButtonsCard
+                    }
+
+                    // 2. Safe Save Execution
                     scope.launch {
-                        handleSaveTask(
-                            context = context,
-                            viewModel = viewModel,
-                            workflowId = workflowId,
-                            taskName = taskName,
-                            locationTriggerExpanded = locationTriggerExpanded,
-                            locationName = locationName,
-                            locationDetailsInput = locationDetailsInput,
-                            radiusValue = radiusValue,
-                            triggerOnOption = triggerOnOption,
-                            wifiTriggerExpanded = wifiTriggerExpanded,
-                            wifiState = wifiState,
-                            timeTriggerExpanded = timeTriggerExpanded,
-                            timeValue = timeValue,
-                            bluetoothDeviceTriggerExpanded = bluetoothDeviceTriggerExpanded,
-                            bluetoothDeviceAddress = bluetoothDeviceAddress,
-                            sendNotificationActionExpanded = sendNotificationActionExpanded,
-                            notificationTitle = notificationTitle,
-                            notificationMessage = notificationMessage,
-                            notificationPriority = notificationPriority,
-                            toggleSettingsActionExpanded = toggleSettingsActionExpanded,
-                            toggleSetting = toggleSetting,
-                            runScriptActionExpanded = runScriptActionExpanded,
-                            scriptText = scriptText,
-                            selectedScriptPermissions = selectedScriptPermissions,
-                            setSoundModeActionExpanded = setSoundModeActionExpanded,
-                            soundMode = soundMode,
-                            blockAppsActionExpanded = blockAppsActionExpanded,
-                            selectedAppsToBlock = selectedAppsToBlock,
-                            unblockAppsActionExpanded = unblockAppsActionExpanded,
-                            onSuccess = {
-                                showSuccessSnackbar = true
-                                onSaveTask(taskName)
-                            },
-                            onError = { error ->
-                                errorMessage = error
-                                taskNameError = if (error.contains("name")) error else null
-                                showErrorDialog = true
-                            }
-                        )
+                        try {
+                            handleSaveTask(
+                                context = context,
+                                viewModel = viewModel,
+                                workflowId = workflowId,
+                                taskName = taskName,
+
+                                // Triggers
+                                locationTriggerExpanded = validLocation, // Pass VALIDATED flag
+                                locationName = locationName,
+                                locationDetailsInput = locationDetailsInput,
+                                radiusValue = radiusValue,
+                                triggerOnOption = triggerOnOption,
+
+                                wifiTriggerExpanded = validWifi, // Pass VALIDATED flag
+                                wifiState = wifiState,
+                                wifiSsid = wifiSsid,
+                                wifiTriggerType = wifiTriggerType,
+
+                                timeTriggerExpanded = validTime, // Pass VALIDATED flag
+                                timeValue = timeValue,
+
+                                bluetoothDeviceTriggerExpanded = validBluetooth, // Pass VALIDATED flag
+                                bluetoothMacAddress = bluetoothDeviceAddress, // Map state variable
+                                bluetoothDeviceName = bluetoothDeviceName,
+                                bluetoothTriggerType = bluetoothTriggerType,
+
+                                // Actions
+                                sendNotificationActionExpanded = validNotification,
+                                notificationTitle = notificationTitle,
+                                notificationMessage = notificationMessage,
+                                notificationPriority = notificationPriority,
+
+                                toggleSettingsActionExpanded = validToggle,
+                                toggleSetting = toggleSetting,
+
+                                runScriptActionExpanded = validScript,
+                                scriptText = scriptText,
+                                selectedScriptPermissions = selectedScriptPermissions,
+
+                                setSoundModeActionExpanded = validSound,
+                                soundMode = soundMode,
+
+                                blockAppsActionExpanded = validBlock,
+                                selectedAppsToBlock = selectedAppsToBlock,
+
+                                unblockAppsActionExpanded = validUnblock,
+
+                                onSuccess = {
+                                    showSuccessSnackbar = true
+                                    onSaveTask(taskName)
+                                },
+                                onError = { error ->
+                                    errorMessage = error
+                                    taskNameError = if (error.contains("name")) error else null
+                                    showErrorDialog = true
+                                }
+                            )
+                        } catch (e: Exception) {
+                            Log.e("TaskCreation", "Crash prevented during save", e)
+                            errorMessage = "Error saving task: ${e.message}"
+                            showErrorDialog = true
+                        }
                     }
                 },
                 onBack = onBack
             )
 
-
             Spacer(modifier = Modifier.height(16.dp))
         }
+
+
 
         // Error Dialog
         if (showErrorDialog) {
@@ -577,13 +633,6 @@ private fun TriggersCard(
     onBluetoothTriggerTypeChange: (String) -> Unit,
     context: Context
 ) {
-    val availableTriggers = listOf(
-        "Time" to Icons.Default.Schedule,
-        "Location" to Icons.Default.LocationOn,
-        "WiFi" to Icons.Default.Wifi,           // ✅ ADD THIS
-        "Bluetooth" to Icons.Default.Bluetooth  // ✅ ADD THIS
-    )
-
     Card(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)
@@ -655,9 +704,13 @@ private fun TriggersCard(
                     selectedDevice = selectedBluetoothDevice,
                     deviceName = bluetoothDeviceName,
                     macAddress = bluetoothMacAddress,
-                    onDeviceNameChange = onBluetoothDeviceNameChange,
-                    onMacAddressChange = onBluetoothMacAddressChange,
-                    onDeviceSelected = onBluetoothDeviceSelected,
+                    onDeviceNameChange = onBluetoothDeviceNameChange, // Passed Callback
+                    onMacAddressChange = onBluetoothMacAddressChange, // Passed Callback
+                    onDeviceSelected = { device ->
+                        onBluetoothDeviceSelected(device) // Update Object
+                        onBluetoothMacAddressChange(device.macAddress) // Update String State
+                        onBluetoothDeviceNameChange(device.deviceName) // Update String State
+                    },
                     triggerType = bluetoothTriggerType,
                     onTriggerTypeChange = onBluetoothTriggerTypeChange,
                     context = context
@@ -666,6 +719,8 @@ private fun TriggersCard(
         }
     }
 }
+
+
 
 //  UPDATED ACTIONS CARD
 
@@ -746,7 +801,7 @@ private fun ActionsCard(
             // NEW: Set Sound Mode Action
             ExpandableActionSection(
                 title = "Set Sound Mode",
-                icon = Icons.Default.VolumeUp,
+                icon = Icons.AutoMirrored.Filled.VolumeUp,
                 expanded = setSoundModeActionExpanded,
                 onExpandedChange = onSoundModeExpandedChange
             ) {
@@ -810,8 +865,9 @@ private fun SetSoundModeContent(
 
         // Sound mode options
         val soundModes = listOf(
-            SoundModeOption("Normal", Icons.Default.VolumeUp, "Normal ringing and notifications"),
-            SoundModeOption("Silent", Icons.Default.VolumeOff, "No sound or vibration"),
+            SoundModeOption("Normal",
+                Icons.AutoMirrored.Filled.VolumeUp, "Normal ringing and notifications"),
+            SoundModeOption("Silent", Icons.AutoMirrored.Filled.VolumeOff, "No sound or vibration"),
             SoundModeOption("Vibrate", Icons.Default.Vibration, "Vibrate only, no sound"),
             SoundModeOption("DND", Icons.Default.DoNotDisturb, "Do Not Disturb mode")
         )
@@ -926,7 +982,7 @@ private fun BlockAppsContent(
             fontWeight = FontWeight.Medium
         )
 
-        // ✅ Accessibility Service Warning
+        //  Accessibility Service Warning
         if (!isAccessibilityEnabled) {
             Card(
                 modifier = Modifier.fillMaxWidth(),
@@ -983,7 +1039,7 @@ private fun BlockAppsContent(
             }
         }
 
-        // ✅ Selected Apps Display with Remove Option
+        //  Selected Apps Display with Remove Option
         if (selectedApps.isNotEmpty()) {
             Card(
                 modifier = Modifier.fillMaxWidth(),
@@ -1107,7 +1163,7 @@ private fun UnblockAppsContent() {
 
 
 /**
- * ✅ NEW: Chip component for selected apps
+ *  NEW: Chip component for selected apps
  */
 @Composable
 private fun SelectedAppChip(
@@ -1172,7 +1228,7 @@ private fun SelectedAppChip(
 }
 
 /**
- * ✅ NEW: Check if accessibility service is enabled
+ *  NEW: Check if accessibility service is enabled
  */
 private fun isAccessibilityServiceEnabled(context: Context): Boolean {
     val serviceName = "${context.packageName}/.blocker.AppBlockAccessibilityService"
@@ -1501,7 +1557,7 @@ private fun LocationTriggerContent(
     var currentAddress by remember { mutableStateOf<String?>(null) }
     var showLocationPermissionDialog by remember { mutableStateOf(false) }
 
-    // ✅ ADD: Location ViewModel and Save states
+    //  ADD: Location ViewModel and Save states
     val locationViewModel: LocationViewModel = viewModel()
     val savedLocations by locationViewModel.allLocations.observeAsState(emptyList())
     var showSaveLocationDialog by remember { mutableStateOf(false) }
@@ -1556,7 +1612,7 @@ private fun LocationTriggerContent(
 
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
 
-        // ✅ ENHANCED: Location Name Field with Saved Location Dropdown
+        //  ENHANCED: Location Name Field with Saved Location Dropdown
         ExposedDropdownMenuBox(
             expanded = showLocationDropdown,
             onExpandedChange = { showLocationDropdown = it }
@@ -1770,7 +1826,7 @@ private fun LocationTriggerContent(
             }
         }
 
-        // ✅ SAVE LOCATION SECTION - appears when location is ready
+        //  SAVE LOCATION SECTION - appears when location is ready
         if (locationName.isNotBlank() && locationDetailsInput.isNotBlank() && isValidCoordinates(locationDetailsInput)) {
             Card(
                 modifier = Modifier.fillMaxWidth(),
@@ -1815,7 +1871,7 @@ private fun LocationTriggerContent(
                         }
                     }
 
-                    // ✅ SAVE LOCATION BUTTON
+                    //  SAVE LOCATION BUTTON
                     OutlinedButton(
                         onClick = {
                             showSaveLocationDialog = true
@@ -2093,8 +2149,10 @@ private fun LocationTriggerContent(
 
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             listOf(
-                Triple("Entry", Icons.Default.Login, "Trigger when entering the location area"),
-                Triple("Exit", Icons.Default.Logout, "Trigger when leaving the location area"),
+                Triple("Entry",
+                    Icons.AutoMirrored.Filled.Login, "Trigger when entering the location area"),
+                Triple("Exit",
+                    Icons.AutoMirrored.Filled.Logout, "Trigger when leaving the location area"),
                 Triple("Both", Icons.Default.SwapHoriz, "Trigger on both entry and exit")
             ).forEach { (option, icon, description) ->
                 Card(
@@ -2156,7 +2214,7 @@ private fun LocationTriggerContent(
         }
     }
 
-    // ✅ SAVE LOCATION DIALOG
+    //  SAVE LOCATION DIALOG
     if (showSaveLocationDialog) {
         SaveLocationToRoomDialog(
             initialName = locationName,
@@ -2175,7 +2233,7 @@ private fun LocationTriggerContent(
                             isFavorite = isFavorite
                         )
                         showSaveLocationDialog = false
-                        Toast.makeText(context, "✅ Location '$name' saved!", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(context, " Location '$name' saved!", Toast.LENGTH_SHORT).show()
                     } catch (e: Exception) {
                         Toast.makeText(context, "❌ Failed to save: ${e.message}", Toast.LENGTH_LONG).show()
                     } finally {
@@ -2312,7 +2370,7 @@ private fun TimeTriggerContent(
 
     val datePickerState = rememberDatePickerState()
 
-    // ✅ AUTOMATICALLY DETECTS USER'S SYSTEM PREFERENCE (12hr or 24hr)
+    //  AUTOMATICALLY DETECTS USER'S SYSTEM PREFERENCE (12hr or 24hr)
     val context = LocalContext.current
     val is24HourFormat = android.text.format.DateFormat.is24HourFormat(context)
 
@@ -2342,7 +2400,7 @@ private fun TimeTriggerContent(
             Spacer(modifier = Modifier.width(8.dp))
             Text(
                 selectedTime?.let {
-                    // ✅ Display in user's preferred format
+                    //  Display in user's preferred format
                     if (is24HourFormat) {
                         String.format("%02d:%02d", it.hour, it.minute)
                     } else {
@@ -2356,7 +2414,7 @@ private fun TimeTriggerContent(
 
         // Show scheduled time
         if (selectedDate != null && selectedTime != null) {
-            // ✅ Create local variable to avoid smart cast issue
+            //  Create local variable to avoid smart cast issue
             val timeValue = selectedTime  // This makes a copy
             val dateValue = selectedDate
 
@@ -2368,11 +2426,11 @@ private fun TimeTriggerContent(
                 Log.d("TimeTriggerContent", "Selected Time: $timeValue")
                 Log.d("TimeTriggerContent", "Combined DateTime: $dateTime")
 
-                // ✅ FIXED: Format as HH:mm (e.g., "22:11")
+                //  FIXED: Format as HH:mm (e.g., "22:11")
                 val formattedTime = String.format("%02d:%02d", timeValue.hour, timeValue.minute)
                 onTimeValueChange(formattedTime)
 
-                Log.d("TimeTriggerContent", "✅ Formatted time: $formattedTime")
+                Log.d("TimeTriggerContent", " Formatted time: $formattedTime")
 
                 Card(
                     modifier = Modifier.fillMaxWidth(),
@@ -2439,7 +2497,7 @@ private fun TimeTriggerContent(
             onDismissRequest = { showTimePicker = false },
             confirmButton = {
                 TextButton(onClick = {
-                    // ✅ TimePickerState.hour is ALWAYS in 24-hour format (0-23)
+                    //  TimePickerState.hour is ALWAYS in 24-hour format (0-23)
                     // No conversion needed - it handles 12hr/24hr automatically!
                     selectedTime = LocalTime.of(
                         timePickerState.hour,    // Always 0-23
@@ -2602,9 +2660,9 @@ fun WiFiTriggerContent(
     }
 }
 
-// ✅ BLUETOOTH TRIGGER CONTENT
+//  BLUETOOTH TRIGGER CONTENT
 @Composable
-fun BluetoothTriggerContent(
+private fun BluetoothTriggerContent(
     selectedDevice: SavedBluetoothDevice?,
     deviceName: String,
     macAddress: String,
@@ -2615,137 +2673,148 @@ fun BluetoothTriggerContent(
     onTriggerTypeChange: (String) -> Unit,
     context: Context
 ) {
+    // 1. Initialize ViewModel
     val bluetoothViewModel: BluetoothViewModel = viewModel()
-    val savedDevices by bluetoothViewModel.allDevices.observeAsState(emptyList())
-    var showDevicePicker by remember { mutableStateOf(false) }
 
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.tertiaryContainer
-        )
-    ) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Text(
-                "📲 Bluetooth Device Trigger",
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold
-            )
+    // 2. Observe LiveData as State
+    val pairedDevices by bluetoothViewModel.pairedDevices.observeAsState(initial = emptyList())
 
-            Spacer(modifier = Modifier.height(12.dp))
-
-            // Device Name
-            OutlinedTextField(
-                value = deviceName,
-                onValueChange = onDeviceNameChange,
-                label = { Text("Device Name") },
-                placeholder = { Text("e.g., Car Bluetooth") },
-                modifier = Modifier.fillMaxWidth(),
-                leadingIcon = {
-                    Icon(Icons.Default.Bluetooth, contentDescription = null)
-                }
-            )
-
-            Spacer(modifier = Modifier.height(8.dp))
-
-            // MAC Address
-            OutlinedTextField(
-                value = macAddress,
-                onValueChange = onMacAddressChange,
-                label = { Text("MAC Address") },
-                placeholder = { Text("AA:BB:CC:DD:EE:FF") },
-                modifier = Modifier.fillMaxWidth(),
-                trailingIcon = {
-                    IconButton(onClick = { showDevicePicker = true }) {
-                        Icon(Icons.Default.ArrowDropDown, "Pick saved device")
-                    }
-                }
-            )
-
-            Spacer(modifier = Modifier.height(12.dp))
-
-            // Trigger Type
-            Text("Trigger When:", style = MaterialTheme.typography.labelMedium)
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                FilterChip(
-                    selected = triggerType == "connect",
-                    onClick = { onTriggerTypeChange("connect") },
-                    label = { Text("Connected") },
-                    modifier = Modifier.weight(1f)
-                )
-
-                FilterChip(
-                    selected = triggerType == "disconnect",
-                    onClick = { onTriggerTypeChange("disconnect") },
-                    label = { Text("Disconnected") },
-                    modifier = Modifier.weight(1f)
-                )
-            }
-
-            Spacer(modifier = Modifier.height(8.dp))
-
-            // Scan for Devices Button
-            Button(
-                onClick = {
-                    // Scan for Bluetooth devices
-                    Toast.makeText(context, "Scanning for Bluetooth devices...", Toast.LENGTH_SHORT).show()
-                },
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Icon(Icons.Default.Search, null)
-                Spacer(modifier = Modifier.width(8.dp))
-                Text("Scan Nearby Devices")
-            }
+    // 3. Permission Launcher
+    val permissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestMultiplePermissions()
+    ) { permissions ->
+        val allGranted = permissions.entries.all { it.value }
+        if (allGranted) {
+            bluetoothViewModel.refreshPairedDevices()
+        } else {
+            Toast.makeText(context, "Bluetooth permissions required", Toast.LENGTH_SHORT).show()
         }
     }
 
-    // Device Picker Dialog
-    if (showDevicePicker) {
-        AlertDialog(
-            onDismissRequest = { showDevicePicker = false },
-            title = { Text("Select Bluetooth Device") },
-            text = {
-                LazyColumn {
-                    items(savedDevices.size) { index ->
-                        val device = savedDevices[index]
-                        Card(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(vertical = 4.dp)
-                                .clickable {
-                                    onDeviceSelected(device)
-                                    onDeviceNameChange(device.deviceName)
-                                    onMacAddressChange(device.macAddress)
-                                    showDevicePicker = false
-                                }
-                        ) {
-                            Row(
-                                modifier = Modifier.padding(12.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Icon(Icons.Default.Bluetooth, null)
-                                Spacer(modifier = Modifier.width(12.dp))
-                                Column {
-                                    Text(device.displayName, fontWeight = FontWeight.Bold)
-                                    Text(device.macAddress, style = MaterialTheme.typography.bodySmall)
-                                }
+    // 4. Load Devices on Start
+    LaunchedEffect(Unit) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            if (ContextCompat.checkSelfPermission(context, Manifest.permission.BLUETOOTH_CONNECT) == PackageManager.PERMISSION_GRANTED) {
+                bluetoothViewModel.refreshPairedDevices()
+            }
+        } else {
+            bluetoothViewModel.refreshPairedDevices()
+        }
+    }
+
+    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+
+        // Trigger Type Selector
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text("Trigger Event:", style = MaterialTheme.typography.labelMedium)
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                FilterChip(
+                    selected = triggerType == "connect",
+                    onClick = { onTriggerTypeChange("connect") },
+                    label = { Text("Connect") },
+                    leadingIcon = { if (triggerType == "connect") Icon(Icons.Default.Check, null) else null }
+                )
+                FilterChip(
+                    selected = triggerType == "disconnect",
+                    onClick = { onTriggerTypeChange("disconnect") },
+                    label = { Text("Disconnect") },
+                    leadingIcon = { if (triggerType == "disconnect") Icon(Icons.Default.Check, null) else null }
+                )
+            }
+        }
+
+        HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
+
+        // Paired Devices List
+        Text("Select Paired Device:", style = MaterialTheme.typography.labelMedium)
+
+        if (pairedDevices.isEmpty()) {
+            OutlinedButton(
+                onClick = {
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                        permissionLauncher.launch(arrayOf(
+                            Manifest.permission.BLUETOOTH_CONNECT,
+                            Manifest.permission.BLUETOOTH_SCAN
+                        ))
+                    } else {
+                        bluetoothViewModel.refreshPairedDevices()
+                    }
+                },
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Icon(Icons.Default.Bluetooth, null, modifier = Modifier.size(18.dp))
+                Spacer(modifier = Modifier.width(8.dp))
+                Text("Load Paired Devices")
+            }
+        } else {
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(max = 200.dp)
+                    .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f), RoundedCornerShape(8.dp))
+            ) {
+                items(pairedDevices) { device ->
+                    // FIX: Use macAddress instead of address
+                    val isSelected = macAddress == device.macAddress
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable {
+                                onDeviceSelected(device)
+                                // FIX: Use correct property names from data class
+                                onDeviceNameChange(device.deviceName)
+                                onMacAddressChange(device.macAddress)
                             }
+                            .background(if (isSelected) MaterialTheme.colorScheme.primaryContainer else androidx.compose.ui.graphics.Color.Transparent)
+                            .padding(12.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(Icons.Default.Bluetooth, null, tint = MaterialTheme.colorScheme.primary)
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            // FIX: Use deviceName
+                            Text(device.deviceName, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
+                            // FIX: Use macAddress
+                            Text(device.macAddress, style = MaterialTheme.typography.bodySmall)
+                        }
+                        if (isSelected) {
+                            Icon(Icons.Default.CheckCircle, null, tint = MaterialTheme.colorScheme.primary)
                         }
                     }
-                }
-            },
-            confirmButton = {
-                TextButton(onClick = { showDevicePicker = false }) {
-                    Text("Cancel")
+                    HorizontalDivider(thickness = 0.5.dp)
                 }
             }
+        }
+
+        // Manual Entry
+        Text("Or Enter Manually:", style = MaterialTheme.typography.labelMedium)
+
+        OutlinedTextField(
+            value = deviceName,
+            onValueChange = onDeviceNameChange,
+            label = { Text("Device Name") },
+            modifier = Modifier.fillMaxWidth(),
+            singleLine = true
+        )
+
+        OutlinedTextField(
+            value = macAddress,
+            onValueChange = onMacAddressChange,
+            label = { Text("MAC Address") },
+            placeholder = { Text("AA:BB:CC:11:22:33") },
+            modifier = Modifier.fillMaxWidth(),
+            singleLine = true
         )
     }
 }
+
+
+
+
 
 //  ACTION CONTENT COMPONENTS
 
@@ -2990,8 +3059,9 @@ private fun ErrorDialog(
 }
 //  SAVE HANDLER
 /**
- * ✅ FIXED: Complete handleSaveTask function with proper variable scoping
+ *  FIXED: Complete handleSaveTask function with proper variable scoping
  */
+//  FIXED: handleSaveTask function with correct parameters
 private suspend fun handleSaveTask(
     context: Context,
     viewModel: WorkflowViewModel,
@@ -3004,10 +3074,14 @@ private suspend fun handleSaveTask(
     triggerOnOption: String,
     wifiTriggerExpanded: Boolean,
     wifiState: String,
+    wifiSsid: String,               //  NEW
+    wifiTriggerType: String,        //  NEW
     timeTriggerExpanded: Boolean,
     timeValue: String,
     bluetoothDeviceTriggerExpanded: Boolean,
-    bluetoothDeviceAddress: String,
+    bluetoothMacAddress: String,    //  RENAMED from bluetoothDeviceAddress
+    bluetoothDeviceName: String,    //  NEW
+    bluetoothTriggerType: String,   //  NEW
     sendNotificationActionExpanded: Boolean,
     notificationTitle: String,
     notificationMessage: String,
@@ -3034,13 +3108,14 @@ private suspend fun handleSaveTask(
             onError("Task name cannot be empty")
             return
         }
-        Log.d("TaskCreation", "✅ Task name valid: $taskName")
+        Log.d("TaskCreation", " Task name valid: $taskName")
 
         // 2. CHECK WHICH TRIGGERS ARE CONFIGURED
         val hasLocationTrigger = locationTriggerExpanded && locationDetailsInput.isNotBlank()
         val hasWifiTrigger = wifiTriggerExpanded
         val hasTimeTrigger = timeTriggerExpanded && timeValue.isNotBlank()
-        val hasBluetoothTrigger = bluetoothDeviceTriggerExpanded && bluetoothDeviceAddress.isNotBlank()
+        val hasBluetoothTrigger = bluetoothDeviceTriggerExpanded && bluetoothMacAddress.isNotBlank()
+
 
         Log.d("TaskCreation", "🔍 TRIGGER CHECK:")
         Log.d("TaskCreation", "  Location: $hasLocationTrigger")
@@ -3054,9 +3129,9 @@ private suspend fun handleSaveTask(
             onError("Please configure at least ONE trigger")
             return
         }
-        Log.d("TaskCreation", "✅ At least one trigger is configured")
+        Log.d("TaskCreation", " At least one trigger is configured")
 
-        // 4. ✅ CREATE LIST OF ALL CONFIGURED TRIGGERS (DECLARE triggers HERE)
+        // 4.  CREATE LIST OF ALL CONFIGURED TRIGGERS (DECLARE triggers HERE)
         val triggers = mutableListOf<Trigger>()
 
         if (hasTimeTrigger) {
@@ -3066,12 +3141,19 @@ private suspend fun handleSaveTask(
 
         if (hasWifiTrigger) {
             Log.d("TaskCreation", "Adding WIFI trigger: $wifiState")
-            triggers.add(TriggerHelpers.createWifiTrigger(null, wifiState))
+            triggers.add(TriggerHelpers.createWifiTrigger(
+                if (wifiSsid.isNotBlank()) wifiSsid else null,
+                wifiTriggerType
+            ))
         }
 
         if (hasBluetoothTrigger) {
-            Log.d("TaskCreation", "Adding BLUETOOTH trigger: $bluetoothDeviceAddress")
-            triggers.add(TriggerHelpers.createBluetoothTrigger(bluetoothDeviceAddress, null))
+            Log.d("TaskCreation", "Adding BLUETOOTH trigger: $bluetoothMacAddress ($bluetoothTriggerType)")
+            triggers.add(TriggerHelpers.createBluetoothTrigger(
+                bluetoothMacAddress,                   //  Use the MAC address
+                bluetoothDeviceName.ifBlank { null },  //  Pass the device name
+                bluetoothTriggerType                   //  Pass the trigger type (connect/disconnect)
+            ))
         }
 
         if (hasLocationTrigger) {
@@ -3098,7 +3180,7 @@ private suspend fun handleSaveTask(
             ))
         }
 
-        Log.d("TaskCreation", "✅ Total triggers created: ${triggers.size}")
+        Log.d("TaskCreation", " Total triggers created: ${triggers.size}")
 
         // 5. CHECK WHICH ACTIONS ARE CONFIGURED
         val hasNotificationAction = sendNotificationActionExpanded && notificationTitle.isNotBlank()
@@ -3123,9 +3205,9 @@ private suspend fun handleSaveTask(
             onError("Please configure at least ONE action")
             return
         }
-        Log.d("TaskCreation", "✅ At least one action is configured")
+        Log.d("TaskCreation", " At least one action is configured")
 
-        // 7. ✅ CREATE LIST OF ALL CONFIGURED ACTIONS (DECLARE actions HERE)
+        // 7.  CREATE LIST OF ALL CONFIGURED ACTIONS (DECLARE actions HERE)
         val actions = mutableListOf<Action>()
 
         if (hasNotificationAction) {
@@ -3182,7 +3264,7 @@ private suspend fun handleSaveTask(
             actions.add(secureScriptAction)
         }
 
-        Log.d("TaskCreation", "✅ Total actions created: ${actions.size}")
+        Log.d("TaskCreation", " Total actions created: ${actions.size}")
 
         // 8. SAVE TO DATABASE
         Log.d("TaskCreation", "💾 Saving workflow...")
@@ -3203,13 +3285,13 @@ private suspend fun handleSaveTask(
             )
         }
 
-        Log.d("TaskCreation", "✅ Workflow saved. Triggers will be automatically registered.")
+        Log.d("TaskCreation", " Workflow saved. Triggers will be automatically registered.")
 
         // 9. ADD GEOFENCES FOR LOCATION TRIGGERS
         if (workflowId == null || workflowId == 0L) {
             Log.w("TaskCreation", "⚠️ Skipping geofence registration - invalid workflowId: $workflowId")
         } else {
-            // ✅ FIXED: Explicit type for filter and forEach
+            //  FIXED: Explicit type for filter and forEach
             val locationTriggers: List<Trigger> = triggers.filter { it.type == "LOCATION" }
             locationTriggers.forEach { trigger: Trigger ->
                 try {
@@ -3224,7 +3306,7 @@ private suspend fun handleSaveTask(
                             data.triggerOnEntry,
                             data.triggerOnExit
                         )
-                        Log.d("TaskCreation", "✅ Geofence registered for location: ${data.locationName}")
+                        Log.d("TaskCreation", " Geofence registered for location: ${data.locationName}")
                     }
                 } catch (e: Exception) {
                     Log.e("TaskCreation", "❌ Geofence setup failed", e)
@@ -3245,6 +3327,7 @@ private suspend fun handleSaveTask(
         onError("Error: ${e.message}")
     }
 }
+
 
 
 //  UTILITY FUNCTIONS
@@ -3473,7 +3556,7 @@ private fun validateScript(scriptCode: String) {
     }
 }
 
-// ✅ Auto-Reply Settings Card for TaskCreationScreen
+//  Auto-Reply Settings Card for TaskCreationScreen
 @Composable
 fun AutoReplySettingsCard(
     modifier: Modifier = Modifier
@@ -3964,16 +4047,16 @@ private suspend fun saveLocationToRoom(
             throw IllegalArgumentException("Coordinates are out of valid range")
         }
 
-        // ✅ FIX: Pass radius as Double (will be converted to Int in LocationViewModel)
+        //  FIX: Pass radius as Double (will be converted to Int in LocationViewModel)
         locationViewModel.saveLocation(
             name = name,
             latitude = latitude,
             longitude = longitude,
-            radius = radius.toDouble(), // ✅ Convert Float to Double
+            radius = radius.toDouble(), //  Convert Float to Double
             address = address
         )
 
-        Log.d("TaskCreation", "✅ Saved location to Room DB: $name at ($latitude, $longitude)")
+        Log.d("TaskCreation", " Saved location to Room DB: $name at ($latitude, $longitude)")
 
     } catch (e: Exception) {
         Log.e("TaskCreation", "❌ Failed to save location to Room DB", e)
@@ -3982,7 +4065,7 @@ private suspend fun saveLocationToRoom(
 }
 
 /**
- * ✅ Individual saved location item
+ *  Individual saved location item
  */
 @Composable
 private fun LocationItem(
